@@ -1,0 +1,3 @@
+name = Node revision required per role
+description = "Allows administrators to force users to set and log a new revision based on role."
+core = 7.x

@@ -1,0 +1,94 @@
+<?php
+
+/**
+ * @file
+ */
+
+/**
+ * Implements hook_module_implements_alter().
+ */
+function node_revision_required_per_role_module_implements_alter(&$implementations, $hook) {
+  switch ($hook) {
+    case 'form_node_type_form_alter':
+      // Ensure our hook runs last so that we have access to 'workflow' fields.
+      if (isset($implementations['node_revision_required_per_role'])) {
+        $group = $implementations['node_revision_required_per_role'];
+        unset($implementations['node_revision_required_per_role']);
+        $implementations['node_revision_required_per_role'] = $group;
+      }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_alter().
+ */
+function node_revision_required_per_role_form_node_type_form_alter(&$form, &$form_state) {
+  if (isset($form['workflow'])) {
+    $roles = user_roles();
+    natcasesort($roles);
+    $content_type_settings = variable_get('node_revision_required_per_role_content_type', array());
+    $content_type_settings += array($form['#node_type']->type => array());
+    // Set weight on node_options since we want to add our field under it.
+    $form['workflow']['node_options']['#weight'] = '-99';
+    $form['workflow']['node_revision_required_per_role'] = array(
+      '#type' => 'checkboxes',
+      '#title' => t('Revision required'),
+      '#description' => t('Select which user roles must always log a new revision for this content type. Requires that <em>Create new revision</em> be set as a default publishing option.'),
+      '#options' => $roles,
+      '#default_value' => $content_type_settings[$form['#node_type']->type],
+      '#access' => user_access('administer site configuration'),
+      '#states' => array(
+        'visible' => array(
+          "input[name='node_options[revision]']" => array("checked" => TRUE)
+        ),
+      ),
+      '#weight' => $form['workflow']['node_options']['#weight'] + 1,
+    );
+    array_unshift($form['#submit'], 'node_revision_required_per_role_content_type_form_submit');
+  }
+}
+
+/**
+ * Form submission callback.
+ */
+function node_revision_required_per_role_content_type_form_submit($form, &$form_state) {
+  $content_type_settings = variable_get('node_revision_required_per_role_content_type', array());
+  unset($content_type_settings[$form_state['values']['type']]);
+  // Only set role values if 'Create new revision' option is checked.
+  if (isset($form_state['values']['node_options']['revision']) && $form_state['values']['node_options']['revision'] === 'revision') {
+    $content_type_settings[$form_state['values']['type']] = $form_state['values']['node_revision_required_per_role'];
+  }
+  variable_set('node_revision_required_per_role_content_type', $content_type_settings);
+}
+
+/**
+ * Implements hook_form_HOOK_alter().
+ */
+function node_revision_required_per_role_form_node_form_alter(&$form, &$form_state) {
+  // Content is being edited.
+  if ($form['nid']['#value']) {
+    $form['#after_build'][] = 'node_revision_required_per_role_node_form_after_build';
+  }
+}
+
+/**
+ * After-build callback for node edit form.
+ */
+function node_revision_required_per_role_node_form_after_build($form, &$form_state) {
+  $content_type_settings = variable_get('node_revision_required_per_role_content_type', array());
+  if (isset($content_type_settings[$form['#entity']->type])) {
+    foreach ($content_type_settings[$form['#entity']->type] as $k => $v) {
+      if ($v !== 0 && user_has_role($v)) {
+        // Revision log message is required; don't let user unset 'Create new
+        // revision' checkbox.
+        $form['revision_information']['log']['#required'] = TRUE;
+        $form['revision_information']['revision']['#default_value'] = TRUE;
+        $form['revision_information']['revision']['#attributes']['disabled'] = 'disabled';
+        $form['revision_information']['#collapsed'] = FALSE;
+        $form['revision_information']['#weight'] = '-99';
+        break;
+      }
+    }
+  }
+  return $form;
+}
