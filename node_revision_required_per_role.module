@@ -65,16 +65,7 @@ function node_revision_required_per_role_content_type_form_submit($form, &$form_
  * Implements hook_form_HOOK_alter().
  */
 function node_revision_required_per_role_form_node_form_alter(&$form, &$form_state) {
-  // Content is being edited.
-  if ($form['nid']['#value']) {
-    $form['#after_build'][] = 'node_revision_required_per_role_node_form_after_build';
-  }
-}
 
-/**
- * After-build callback for node edit form.
- */
-function node_revision_required_per_role_node_form_after_build($form, &$form_state) {
   $content_type_settings = variable_get('node_revision_required_per_role_content_type', array());
   if (isset($content_type_settings[$form['#entity']->type])) {
     foreach ($content_type_settings[$form['#entity']->type] as $k => $v) {
@@ -83,12 +74,11 @@ function node_revision_required_per_role_node_form_after_build($form, &$form_sta
         // revision' checkbox.
         $form['revision_information']['log']['#required'] = TRUE;
         $form['revision_information']['revision']['#default_value'] = TRUE;
-        $form['revision_information']['revision']['#attributes']['disabled'] = 'disabled';
+        $form['revision_information']['revision']['#disabled'] = TRUE;
         $form['revision_information']['#collapsed'] = FALSE;
         $form['revision_information']['#weight'] = '-99';
         break;
       }
     }
   }
-  return $form;
 }
